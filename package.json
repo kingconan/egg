@@ -14,9 +14,13 @@
     "build": "node build/build.js"
   },
   "dependencies": {
+    "fs": "0.0.1-security",
+    "moment": "^2.22.2",
+    "npm": "^6.1.0",
     "vue": "^2.5.2",
     "vue-router": "^3.0.1",
-    "vue-slider-component": "^2.7.2"
+    "vue-slider-component": "^2.7.2",
+    "youtube-dl": "^1.12.2"
   },
   "devDependencies": {
     "autoprefixer": "^7.1.2",
