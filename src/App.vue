@@ -3,11 +3,37 @@
     <div v-if="mode == 0">
       <input type="file" id="uploader-input" accept="video/mp4,video/*,image/*"
              @change="file_change">
+
+       <input placeholder="server url" v-model="qurl" />
+      <button type="button" @click="set_by_qiniu">use qiniu url</button>
+       <input placeholder="youtube Id" v-model="yid" />
+       <button type="button" @click="search_y">get youbube videos</button>
+       <p>uploading... {{upload_progress}} %</p>
+       <div v-if="yobj && yobj.ylist">
+        <table class="ytable">
+            <tr >
+              <td colspan="2">
+                <div>{{yobj.title}}</div>
+                <div>{{yobj.secs}} s</div>
+              </td>
+            </tr>
+            <tr v-for="(f, i) in yobj.ylist">
+              <td style="font-size:10px">
+                <div>{{f.resolution}} - {{f.quality}}</div>
+                <div>{{f.type}}</div>
+                <div>{{f.size || 'no size info'}}</div>
+                <a :href="f.url">download link</a>
+              </td>
+              <td><button type="button" @click="select_y(i)">选择</button></td>
+            </tr>
+          </table>
+       </div>
     </div>
     <div v-else style="width: 100%;position: relative;">
       <div style="float: left;width: 100%;position: relative;height: 100%;overflow-y: auto;">
         <div style="padding-left: 400px;">
           <div style="background-color: #FFF;padding: 0 8px">
+            
             <div v-if="videoLoaded">
               <div style="height: 160px">
                 <div style="font-size: 16px;font-weight: bold;padding: 8px 0">Create Key Points</div>
@@ -22,7 +48,8 @@
                   </div>
 
                 </div>
-                <div style="padding:32px">
+                <div style="padding:32px;position: relative">
+                  
                   <vue-slider :clickable="false"
                               @callback="seek_callback"
                               @drag-end="seek_end"
@@ -30,6 +57,8 @@
                               ref="slider"
                               v-model="currentTime" :max="videoNode.duration"
                               v-bind="slider_setting"></vue-slider>
+                <canvas id="buffered_canvas" :width="sliderWidth" height="8" ></canvas>
+
                 </div>
               </div>
               <div :style="'overflow-y:auto;height:'+ (fullHeight-160) + 'px'">
@@ -64,7 +93,7 @@
               <table style="font-size: 10px;text-align: left">
                 <tr>
                   <td style="width: 50%">name</td>
-                  <td>{{video.name}}</td>
+                  <td>{{title}}</td>
                 </tr>
                 <template v-if="videoLoaded">
                   <tr>
@@ -121,6 +150,7 @@
 <script>
 import vueSlider from './components/vue2-slider'
 import axios from 'axios'
+import * as qiniu from 'qiniu-js'
 
 export default {
   components: {
@@ -129,10 +159,16 @@ export default {
   name: 'App',
   data: function () {
     return {
+      qurl: '',
+      yid: '',
+      ylist: [],
+      yobj: {},
       mode: 0,
+      buffered: 0.0,
       video: null,
       title: '',
       category: '',
+      video_size: 0,
       tag: '',
       coverUrl: '',
       fileUrl: '',
@@ -170,11 +206,12 @@ export default {
           }
           return hours + ':' + minutes + ':' + seconds
         }
-      }
+      },
+      upload_progress: 0.00,
+      canvas: undefined
     }
   },
   created: function () {
-    this.requestYoutubeInfo()
   },
   updated: function () {
     if (this.videoNode !== undefined && this.videoNode === null) {
@@ -185,15 +222,39 @@ export default {
         this.videoNode.addEventListener('loadedmetadata', this.videoNodeLoadedMetaData)
         this.videoNode.addEventListener('timeupdate', this.videoTimeUpdated)
       } else {
-        console.log('video node is null')
+        // console.log('video node is null')
       }
     }
   },
   methods: {
-    requestYoutubeInfo: function () {
-      axios.get('http://119.28.178.163:8080/')
+    select_y: function (index) {
+        var v = this.yobj.ylist[index]
+        this.fileUrl = v.url
+        this.mode = 1
+    },
+    search_y: function () {
+      var self = this
+      axios.get('http://144.202.98.132/y/'+this.yid)
         .then(function (response) {
           console.log(response)
+          if (response.status === 200) {
+            var d = response.data
+            var b = {
+              secs : d.length_seconds,
+              title : d.title,
+              description : d.description,
+              author : d.author,
+              published : d.published,
+              id : d.vid,
+              url : d.video_url,
+              view_count : d.view_count,
+              ylist : d.formats
+            }
+            self.yobj = b
+          } else {
+            alert("error")
+          }
+
         })
         .catch(function (error) {
           console.log(error)
@@ -256,8 +317,50 @@ export default {
         this.videoNode.playbackRate = this.videoNode.playbackRate / 2
       }
     },
+    get_video_buffer: function () {
+      var self = this
+      if(!self.canvas){
+        self.canvas = document.getElementById("buffered_canvas")
+        if(!self.canvas){
+            setTimeout(self.get_video_buffer, 30)
+            return
+          }
+      }
+
+      var canvas = self.canvas
+      var ctx = canvas.getContext('2d');
+      var vid = this.videoNode
+      var b = vid.buffered,
+          i = b.length,
+          w = canvas.width,
+          h = canvas.height,
+          vl = vid.duration,
+          x1, x2;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#d00';
+      //http://p1pr3la28.bkt.clouddn.com/python-test3
+      var f = false
+      while (i--) {
+        if (b.end(i) >= vl && i === 1){
+          f = true
+        }
+          x1 = b.start(i) / vl * w;
+          x2 = b.end(i) / vl * w;
+          ctx.fillRect(x1, 0, x2 - x1, h);
+      }
+      ctx.fillStyle = '#fff';
+      
+      if(f){
+        console.log("buffered finished")
+        return
+      }
+      setTimeout(self.get_video_buffer, 1000)
+    },
     videoTimeUpdated: function () {
-      // console.log(this.videoNode.buffered.end(0))
+      
+      // this.buffered = this.videoNode.buffered.end(0);
       this.currentTime = this.videoNode.currentTime.toFixed(2)
       if (this.loop_end > 0) {
         if (this.loop_end <= this.currentTime) {
@@ -322,6 +425,7 @@ export default {
     },
     videoNodeLoadedMetaData: function () {
       this.videoLoaded = true
+      this.get_video_buffer()
       console.log('loaded meta data')
     },
     videoNodeDurationChange: function () {
@@ -330,23 +434,94 @@ export default {
     file_change: function (event) {
       console.log(event.target.files)
       if (event.target.files.length > 0) {
-        this.video = event.target.files[0]
-        // console.log(video.name)
-        // console.log(video.size)
-        // console.log(video.type)
-        var testUrl = 'https://r5---sn-nx57ynls.googlevideo.com/videoplayback?mime=video%2Fmp4&itag=22&sparams=dur%2Cei%2Cid%2Cinitcwndbps%2Cip%2Cipbits%2Citag%2Clmt%2Cmime%2Cmm%2Cmn%2Cms%2Cmv%2Cpl%2Cratebypass%2Crequiressl%2Csource%2Cexpire&signature=9C75983B6D4C249904320FD21F1A92614AA95B66.6CEC8923BB82EC10DBB37339A8C11B37BF587963&mt=1529996261&lmt=1527480889563522&ratebypass=yes&source=youtube&ip=108.160.138.170&dur=831.715&requiressl=yes&ms=au%2Conr&ei=WuQxW-yuKJKV4AKhnYL4CA&mv=m&pl=25&ipbits=0&initcwndbps=398750&fexp=23709359&id=o-AMRTzeqc6expOWSQojLQGkpY2FEmQ9y5ii6c0Lg_HkgD&mn=sn-nx57ynls%2Csn-a5mekney&key=yt6&mm=31%2C26&fvip=5&expire=1530017978&c=WEB&title=EXTREMELY%20GRAPHIC-%20Live%20Maine%20Lobster%20For%20Sashimi%20Part%201%20-%20How%20To%20Make%20Sushi%20Series'
-        this.fileUrl = URL.createObjectURL(this.video)
-        this.mode = 1
+        this.get_q_token(event.target.files[0])
+
+        // this.video = event.target.files[0]
+        // this.video_size = video.size
+        // this.fileUrl = URL.createObjectURL(this.video)
+        // this.mode = 1
       }
+    },
+    set_by_qiniu: function () {
+        this.fileUrl = this.qurl
+        this.mode = 1
+    },
+    get_q_meta: function (name) {
+      console.log('get meta data')
+      var url = 'http://p1pr3la28.bkt.clouddn.com/'+name+'?avinfo'
+      console.log(url)
+      axios.get(url)
+        .then(function (response){
+          console.log(response.data)
+        })
+        .catch(function (error) {
+          console.log(error)
+        })
+    },
+    get_q_token: function (file) {
+      console.log('upload to qiniu')
+      console.log(file)
+      var self = this
+      axios.get('http://127.0.0.1:3000/q/token')
+        .then(function (response) {
+          console.log(response)
+          if (response.status === 200) {
+            var token = response.data.token
+            var config = {
+              useCdnDomain: true,
+              disableStatisticsReport: false,
+              retryCount: 6
+            }
+            var putExtra = {
+              fname: "",
+              params: {},
+              mimeType: file.type
+            }
+            var key = file.name
+            var observable = qiniu.upload(file, key, token, putExtra, config)
+
+            var t0 = performance.now()
+            console.log(t0)
+            var subscription = observable.subscribe(
+              function(res){
+                // console.log("next")
+                // console.log(res.total.percent)
+                self.upload_progress = res.total.percent.toFixed(2)
+              },
+              function(err){
+                console.log("err")
+                console.log(err)
+              },
+              function(res){
+                console.log("complete")
+                console.log(res)
+                var name = res.key
+                var t1 = performance.now()
+                console.log(t1)
+                console.log("upload time = " + (t1 - t0) + " milliseconds.")
+                self.get_q_meta(name)
+              }
+            )
+          } else {
+            alert("error")
+          }
+
+        })
+        .catch(function (error) {
+          console.log(error)
+        })
     },
     handleResize: function (event) {
       var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
       this.fullHeight = height
+      var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
+      this.sliderWidth = width - 400 - 64 - 16
+      console.log('width : ' + this.sliderWidth)
     }
   },
   computed: {
     size: function () {
-      let s = this.video.size
+      let s = this.video_size
       if (s < 1024) {
         return s + 'bytes'
       } else if (s < 1024 * 1024) {
@@ -417,5 +592,9 @@ button{
 button:active{
   box-shadow: none;
   border: 1px solid #909090;
+}
+.ytable td{
+  border-bottom:1px solid #ccc;
+  padding:8px 3px;
 }
 </style>
