@@ -1,66 +1,118 @@
 <template>
-  <div id="app">
+  <div id="app" style="width: 100%;position: relative">
     <div v-if="mode == 0">
       <input type="file" id="uploader-input" accept="video/mp4,video/*,image/*"
              @change="file_change">
     </div>
-    <div v-else>
-        <h2>Key Points Create</h2>
-        <div style="width:30%;float: left;">
-          <div style="width: 100%;height:300px;position: relative">
-            <div v-if="fileUrl">
-              <video style="width:100%" :src="fileUrl" id="videoNode"></video>
-              <div>
-                <div>{{video.name}}</div>
-                <div>{{size}}</div>
-              </div>
-            </div>
-            <div v-else>
-              NO VIDEO SELECTED
-            </div>
-          </div>
-          <div>
-            <button type="button" @click="create">create</button>
-          </div>
-        </div>
-        <div style="position:relative;width:70%;float: left; ">
-          <div v-if="videoLoaded">
-            <div>{{sec2time(currentTime)}} / {{sec2time(videoNode.duration)}}s</div>
-            <div>SPEED {{videoNode.playbackRate}}</div>
-            <button type="button" @click="play2(-1)">/ 2</button>
-            <button type="button" @click="playVideo">{{btnPlay}}</button>
-            <button type="button" @click="play2(1)">x 2</button>
-            <div style="padding:16px">
-              <vue-slider :clickable="false" @callback="seek_callback" @drag-end="seek_end" @drag-start="seek_start" ref="slider"
-               v-model="currentTime" :max="videoNode.duration"
-               v-bind="slider_setting"></vue-slider>
-            </div>
-            <!--<div style="position:relative;width:600px;height:10px;background-color: aliceblue;margin-left: 10px">-->
-              <!--<div class="seek" :style="currentProgress"></div>-->
-            <!--</div>-->
-            <div>
-              <div v-for="(point, index) in points" v-bind:key="index" style="border:1px dashed #F0F0F0;padding:16px;margin: 12px 0">
-                <div>#{{index+1}}</div>
+    <div v-else style="width: 100%;position: relative;">
+      <div style="float: left;width: 100%;position: relative;height: 100%;overflow-y: auto;">
+        <div style="padding-left: 400px;">
+          <div style="background-color: #FFF;padding: 0 8px">
+            <div v-if="videoLoaded">
+              <div style="height: 160px">
+                <div style="font-size: 16px;font-weight: bold;padding: 8px 0">Create Key Points</div>
+                <div style="font-size: 10px;">
+                  <button type="button" @click="play2(-1)">/ 2</button>
+                  <button type="button" @click="playVideo">{{btnPlay}}</button>
+                  <button type="button" @click="play2(1)">x 2</button>
+                  <div style="float: right;margin-right: 15px">
+                    <span>Speed {{videoNode.playbackRate}}</span>
+                    <span> | </span>
+                    <span>{{sec2time(currentTime)}} / {{sec2time(videoNode.duration)}}s</span>
+                  </div>
 
-                <vue-slider :clickable="false"
-                            @currentChangeValue="currentChangeValue"
-                            @drag-end="seek_range_end"
-                            @callback="seek_range_callback"
-                            ref="slider" :interval="0.01"
-                            v-model="point.range" :max="videoNode.duration"
-                            v-bind="slider_setting"></vue-slider>
-                <div style="text-align: left">
-                  <textarea placeholder="add description here" v-model="point.description" rows="3" class="ta"></textarea>
-                  <button type="button" @click="remove_point(index)">remove</button>
-                  <button type="button" @click="play_point(index)">{{btnPlay}}</button>
                 </div>
-
+                <div style="padding:32px">
+                  <vue-slider :clickable="false"
+                              @callback="seek_callback"
+                              @drag-end="seek_end"
+                              @drag-start="seek_start"
+                              ref="slider"
+                              v-model="currentTime" :max="videoNode.duration"
+                              v-bind="slider_setting"></vue-slider>
+                </div>
               </div>
-              <button type="button" @click="add_point">add a key point</button>
+              <div :style="'overflow-y:auto;height:'+ (fullHeight-160) + 'px'">
+                <div v-for="(point, index) in points" v-bind:key="index"
+                     style="border:1px dashed #ccc;padding:16px 32px;margin: 12px 0">
+                  <div style="text-align: left">Step {{index+1}}</div>
+                  <div style="height: 40px"></div>
+                  <vue-slider :clickable="false"
+                              @currentChangeValue="currentChangeValue"
+                              @drag-end="seek_range_end"
+                              @callback="seek_range_callback"
+                              ref="slider" :interval="0.01"
+                              v-model="point.range" :max="videoNode.duration"
+                              v-bind="slider_setting"></vue-slider>
+                  <div style="text-align: left">
+                    <textarea placeholder="add description here" v-model="point.description" rows="2" class="ta"></textarea>
+                    <button type="button" @click="remove_point(index)">remove</button>
+                    <button type="button" @click="play_point(index)">{{btnPlay}}</button>
+                  </div>
+                </div>
+                <button type="button" @click="add_point">add a key point</button>
+              </div>
             </div>
           </div>
         </div>
-        <div style="clear: both"></div>
+      </div>
+      <div style="float: left;width: 360px;padding: 8px;margin-left: -100%">
+        <div style="width: 100%;height:300px;position: relative">
+          <div v-if="fileUrl">
+            <video style="width:100%" :src="fileUrl" id="videoNode"></video>
+            <div>
+              <table style="font-size: 10px;text-align: left">
+                <tr>
+                  <td style="width: 50%">name</td>
+                  <td>{{video.name}}</td>
+                </tr>
+                <template v-if="videoLoaded">
+                  <tr>
+                    <td>width</td>
+                    <td>{{videoNode.videoWidth}}</td>
+                  </tr>
+                  <tr>
+                    <td>height</td>
+                    <td>{{videoNode.videoHeight}}</td>
+                  </tr>
+                  <tr>
+                    <td>size</td>
+                    <td>{{size}}</td>
+                  </tr>
+                  <tr>
+                    <td>duration</td>
+                    <td>{{sec2time(videoNode.duration)}}s</td>
+                  </tr>
+                </template>
+              </table>
+            </div>
+            <div style="height: 1px;background-color: #ccc;margin: 8px 0"></div>
+            <div>
+              <div style="text-align: left;">
+                <input style="width: 300px" v-model="title" placeholder="video title"/>
+              </div>
+              <div style="text-align: left;">
+                <input style="width: 300px" v-model="category" placeholder="category"/>
+              </div>
+              <div style="text-align: left;">
+                <input style="width: 300px;" v-model="tag" placeholder="tag"/>
+              </div>
+
+              <button type="button"
+                      @click="setCover">set current frame as cover</button>
+              <img :src="coverUrl" style="width: 300px;object-fit: cover"/>
+            </div>
+            <div style="height: 1px;background-color: #ccc;margin: 8px 0"></div>
+            <div>
+              <button type="button" @click="create">create</button>
+            </div>
+          </div>
+          <div v-else>
+            NO VIDEO SELECTED
+          </div>
+        </div>
+      </div>
+      <div style="clear: both"></div>
     </div>
 
   </div>
@@ -68,7 +120,7 @@
 
 <script>
 import vueSlider from './components/vue2-slider'
-// var fs = require('fs')
+import axios from 'axios'
 
 export default {
   components: {
@@ -79,6 +131,10 @@ export default {
     return {
       mode: 0,
       video: null,
+      title: '',
+      category: '',
+      tag: '',
+      coverUrl: '',
       fileUrl: '',
       videoNode: null,
       videoLoaded: false,
@@ -88,14 +144,15 @@ export default {
       loop_start: 0,
       loop_end: 0,
       isPlaying: false,
+      fullHeight: 0,
       slider_setting: {
         interval: 1,
         tooltipStyle: {
-          "backgroundColor": "#666",
-          "borderColor": "#666"
+          'backgroundColor': '#666',
+          'borderColor': '#666'
         },
         processStyle: {
-          "backgroundColor": "#999"
+          'backgroundColor': '#999'
         },
         formatter: function (value) {
           var minutes = Math.floor(value / 60);
@@ -117,7 +174,7 @@ export default {
     }
   },
   created: function () {
-
+    this.requestYoutubeInfo()
   },
   updated: function () {
     if (this.videoNode !== undefined && this.videoNode === null) {
@@ -133,6 +190,24 @@ export default {
     }
   },
   methods: {
+    requestYoutubeInfo: function () {
+      axios.get('http://119.28.178.163:8080/')
+        .then(function (response) {
+          console.log(response)
+        })
+        .catch(function (error) {
+          console.log(error)
+        })
+    },
+    setCover: function () {
+      var canvas = document.createElement('canvas')
+      canvas.height = this.videoNode.videoHeight
+      canvas.width = this.videoNode.videoWidth
+      var ctx = canvas.getContext('2d')
+      ctx.drawImage(this.videoNode, 0, 0, canvas.width, canvas.height)
+      var img = new Image()
+      this.coverUrl = canvas.toDataURL()
+    },
     sec2time: function (value) {
       var minutes = Math.floor(value / 60);
       var seconds = value - minutes * 60;
@@ -244,7 +319,6 @@ export default {
         this.videoNode.play()
         this.isPlaying = true
       }
-
     },
     videoNodeLoadedMetaData: function () {
       this.videoLoaded = true
@@ -264,6 +338,10 @@ export default {
         this.fileUrl = URL.createObjectURL(this.video)
         this.mode = 1
       }
+    },
+    handleResize: function (event) {
+      var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+      this.fullHeight = height
     }
   },
   computed: {
@@ -282,20 +360,35 @@ export default {
       return 'margin-left:' + width + 'px'
     },
     btnPlay: function () {
-      return this.isPlaying ? "pause" : "play"
+      return this.isPlaying ? 'pause' : 'play'
     }
+  },
+  // bind event handlers to the `handleResize` method (defined below)
+  mounted: function () {
+    console.log('ready')
+    window.addEventListener('resize', this.handleResize)
+    this.handleResize()
+  },
+  beforeDestroy: function () {
+    window.removeEventListener('resize', this.handleResize)
   }
 }
 </script>
 
 <style>
+html, body{
+  padding: 0;
+  margin: 0;
+  background-color: #f0f0f0;
+  width: 100%;
+  height: 100%;
+}
 #app {
   font-family: 'Avenir', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
 }
 .seek{
   width:10px;
@@ -306,7 +399,23 @@ export default {
 .ta {
   border: 1px solid #f0f0f0;
   padding: 8px;
-  width: 400px;
+  width: 60%;
   outline: none;
+}
+input{
+  padding: 6px;
+  outline: none;
+  margin: 0;
+}
+button{
+  background-color: #f0f0f0;
+  padding: 8px;
+  outline: none;
+  margin: 8px;
+  border: 1px solid #ccc;
+}
+button:active{
+  box-shadow: none;
+  border: 1px solid #909090;
 }
 </style>
