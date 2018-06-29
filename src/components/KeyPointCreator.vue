@@ -1,39 +1,13 @@
 <template>
   <div id="app" style="width: 100%;position: relative">
     <div v-if="mode == 0">
-<!--       <input type="file" id="uploader-input" accept="video/mp4,video/*,image/*"
-             @change="file_change"> -->
-<!-- http://p1pr3la28.bkt.clouddn.com/test.mp4 -->
        <input placeholder="server url" v-model="qurl" />
       <button type="button" @click="set_by_qiniu">use qiniu url</button>
-<!--        <input placeholder="youtube Id" v-model="yid" />
-       <button type="button" @click="search_y">get youbube videos</button>
-       <p>uploading... {{upload_progress}} %</p>
-       <div v-if="yobj && yobj.ylist">
-        <table class="ytable">
-            <tr >
-              <td colspan="2">
-                <div>{{yobj.title}}</div>
-                <div>{{yobj.secs}} s</div>
-              </td>
-            </tr>
-            <tr v-for="(f, i) in yobj.ylist">
-              <td style="font-size:10px">
-                <div>{{f.resolution}} - {{f.quality}}</div>
-                <div>{{f.type}}</div>
-                <div>{{f.size || 'no size info'}}</div>
-                <a :href="f.url">download link</a>
-              </td>
-              <td><button type="button" @click="select_y(i)">选择</button></td>
-            </tr>
-          </table>
-       </div> -->
     </div>
     <div v-else style="width: 100%;position: relative;">
       <div style="float: left;width: 100%;position: relative;height: 100%;overflow-y: auto;">
         <div style="padding-left: 400px;">
           <div style="background-color: #FFF;padding: 0 8px">
-            
             <div v-if="videoLoaded">
               <div style="height: 160px">
                 <div style="font-size: 16px;font-weight: bold;padding: 8px 0">Create Key Points</div>
@@ -49,7 +23,7 @@
 
                 </div>
                 <div style="padding:32px;position: relative">
-                  
+
                   <vue-slider :clickable="false"
                               @callback="seek_callback"
                               @drag-end="seek_end"
@@ -57,10 +31,11 @@
                               ref="slider"
                               v-model="currentTime" :max="videoNode.duration"
                               v-bind="slider_setting"></vue-slider>
-                <canvas id="buffered_canvas" :width="sliderWidth" height="8" ></canvas>
+                <canvas id="buffered_canvas" :width="sliderWidth" height="6" ></canvas>
 
                 </div>
               </div>
+              <div style="height:30px"></div>
               <div :style="'overflow-y:auto;height:'+ (fullHeight-160) + 'px'">
                 <div v-for="(point, index) in points" v-bind:key="index"
                      style="border:1px dashed #ccc;padding:16px 32px;margin: 12px 0">
@@ -90,12 +65,12 @@
       <div style="float: left;width: 360px;padding: 8px;margin-left: -100%">
         <div style="width: 100%;height:300px;position: relative">
           <div v-if="fileUrl">
-            <video style="width:100%" :src="fileUrl" id="videoNode"></video>
+            <video crossorigin="anonymous" preload="auto" style="width:100%" :src="fileUrl" id="videoNode"></video>
             <div>
               <table style="font-size: 10px;text-align: left">
                 <tr>
                   <td style="width: 50%">name</td>
-                  <td>{{title}}</td>
+                  <td>{{qVideo.title}}</td>
                 </tr>
                 <template v-if="videoLoaded">
                   <tr>
@@ -120,18 +95,18 @@
             <div style="height: 1px;background-color: #ccc;margin: 8px 0"></div>
             <div>
               <div style="text-align: left;">
-                <input style="width: 300px" v-model="title" placeholder="video title"/>
+                <input style="width: 300px" v-model="qVideo.title" placeholder="video title"/>
               </div>
               <div style="text-align: left;">
-                <input style="width: 300px" v-model="category" placeholder="category"/>
+                <input style="width: 300px" v-model="qVideo.category" placeholder="category"/>
               </div>
               <div style="text-align: left;">
-                <input style="width: 300px;" v-model="tag" placeholder="tag"/>
+                <input style="width: 300px;" v-model="qVideo.tag" placeholder="tag"/>
               </div>
 
               <button type="button"
                       @click="setCover">set current frame as cover</button>
-              <img :src="coverUrl" style="width: 300px;object-fit: cover"/>
+              <img :src="qVideo.coverUrl" style="width: 300px;object-fit: cover"/>
             </div>
             <div style="height: 1px;background-color: #ccc;margin: 8px 0"></div>
             <div>
@@ -152,7 +127,6 @@
 <script>
 import vueSlider from './vue2-slider'
 import axios from 'axios'
-import * as qiniu from 'qiniu-js'
 
 export default {
   components: {
@@ -161,24 +135,28 @@ export default {
   name: 'App',
   data: function () {
     return {
+      qVideo: {
+        id: "",
+        user_id: "",
+        duration: 0,
+        size: 0,
+        width: 0,
+        height: 0,
+        title: "",
+        category: '',
+        tag: '',
+        coverUrl: "",
+      },
+      points: [],
       qurl: 'http://p1pr3la28.bkt.clouddn.com/test.mp4',
-      yid: '',
-      ylist: [],
-      yobj: {},
       mode: 0,
       buffered: 0.0,
-      video: null,
-      title: '',
-      category: '',
-      video_size: 0,
-      tag: '',
-      coverUrl: '',
       fileUrl: '',
-      videoNode: null,
+      //
+      videoNode: null,//html video node
       videoLoaded: false,
       currentTime: 0.0,
-      videoDuration: 0.0,
-      points: [],
+      //loop for watching one step
       loop_start: 0,
       loop_end: 0,
       isPlaying: false,
@@ -187,7 +165,8 @@ export default {
         interval: 1,
         tooltipStyle: {
           'backgroundColor': '#666',
-          'borderColor': '#666'
+          'borderColor': '#666',
+          'font-size': "10px"
         },
         processStyle: {
           'backgroundColor': '#999'
@@ -209,11 +188,29 @@ export default {
           return hours + ':' + minutes + ':' + seconds
         }
       },
-      upload_progress: 0.00,
       canvas: undefined
     }
   },
   created: function () {
+    //request data here
+    console.log("created")
+    console.log(this.$route.params.id)
+    //81fb9d88-36ed-4601-a933-867d615beadb
+    //http://api.yiqikangfu.com/admin/v1/tutorial/draft/list
+    //http://127.0.0.1:8080/admin/v1/tutorial/draft/list
+    let config = {
+      headers : {
+        'Content-Type':'application/json;charset=UTF-8'
+      },
+    };
+    axios.post('http://127.0.0.1:8080/admin/v1/tutorial/draft/list',
+      {"orgUrl":null,"showAll":null,"orderBy":"id desc","pageNo":1,"pageSize":10}
+    ).then(function (response) {
+      console.log(response);
+    }).catch(function (error){
+      console.log(error)
+    })
+
   },
   updated: function () {
     if (this.videoNode !== undefined && this.videoNode === null) {
@@ -250,39 +247,6 @@ export default {
         reader.readAsText(f);
       }
     },
-    select_y: function (index) {
-        var v = this.yobj.ylist[index]
-        this.fileUrl = v.url
-        this.mode = 1
-    },
-    search_y: function () {
-      var self = this
-      axios.get('http://144.202.98.132/y/'+this.yid)
-        .then(function (response) {
-          console.log(response)
-          if (response.status === 200) {
-            var d = response.data
-            var b = {
-              secs : d.length_seconds,
-              title : d.title,
-              description : d.description,
-              author : d.author,
-              published : d.published,
-              id : d.vid,
-              url : d.video_url,
-              view_count : d.view_count,
-              ylist : d.formats
-            }
-            self.yobj = b
-          } else {
-            alert("error")
-          }
-
-        })
-        .catch(function (error) {
-          console.log(error)
-        })
-    },
     setCover: function () {
       var canvas = document.createElement('canvas')
       canvas.height = this.videoNode.videoHeight
@@ -290,7 +254,7 @@ export default {
       var ctx = canvas.getContext('2d')
       ctx.drawImage(this.videoNode, 0, 0, canvas.width, canvas.height)
       var img = new Image()
-      this.coverUrl = canvas.toDataURL()
+      this.qVideo.coverUrl = canvas.toDataURL()
     },
     sec2time: function (value) {
       var minutes = Math.floor(value / 60);
@@ -313,15 +277,17 @@ export default {
       console.log(json)
     },
     add_point: function () {
+      var d = this.qVideo.duration / 5 || 60;
       var point = {
         description: '',
-        range: [0, 1]
+        range: [0, d]
       }
+
       if (this.points.length > 0) {
         var start = this.points[this.points.length - 1].range[1]
         point = {
           description: '',
-          range: [start, start + 1]
+          range: [start, start + d]
         }
       }
       this.points.push(point)
@@ -345,11 +311,10 @@ export default {
       if(!self.canvas){
         self.canvas = document.getElementById("buffered_canvas")
         if(!self.canvas){
-            setTimeout(self.get_video_buffer, 30)
+            setTimeout(self.get_video_buffer, 1000)
             return
           }
       }
-
       var canvas = self.canvas
       var ctx = canvas.getContext('2d');
       var vid = this.videoNode
@@ -360,10 +325,9 @@ export default {
           vl = vid.duration,
           x1, x2;
 
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = '#999';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#d00';
-      //http://p1pr3la28.bkt.clouddn.com/python-test3
       var f = false
       while (i--) {
         if (b.end(i) >= vl && i === 1){
@@ -374,7 +338,7 @@ export default {
           ctx.fillRect(x1, 0, x2 - x1, h);
       }
       ctx.fillStyle = '#fff';
-      
+
       if(f){
         console.log("buffered finished")
         return
@@ -382,7 +346,7 @@ export default {
       setTimeout(self.get_video_buffer, 1000)
     },
     videoTimeUpdated: function () {
-      
+
       // this.buffered = this.videoNode.buffered.end(0);
       this.currentTime = this.videoNode.currentTime.toFixed(2)
       if (this.loop_end > 0) {
@@ -427,14 +391,10 @@ export default {
       // console.log(end)
     },
     seek_end: function (event) {
-      console.log('end')
-      console.log(event.currentValue)
       this.videoNode.currentTime = event.currentValue
       this.playVideo()
     },
     seek_start: function (event) {
-      // console.log('start')
-      // console.log(event.currentValue)
     },
     playVideo: function () {
       if (this.isPlaying) {
@@ -447,6 +407,7 @@ export default {
       }
     },
     videoNodeLoadedMetaData: function () {
+      console.log("on video loaded")
       this.videoLoaded = true
       this.get_video_buffer()
       console.log('loaded meta data')
@@ -454,97 +415,20 @@ export default {
     videoNodeDurationChange: function () {
       console.log('duration chagned')
     },
-    file_change: function (event) {
-      console.log(event.target.files)
-      if (event.target.files.length > 0) {
-        this.get_q_token(event.target.files[0])
-
-        // this.video = event.target.files[0]
-        // this.video_size = video.size
-        // this.fileUrl = URL.createObjectURL(this.video)
-        // this.mode = 1
-      }
-    },
     set_by_qiniu: function () {
         this.fileUrl = this.qurl
         this.mode = 1
-    },
-    get_q_meta: function (name) {
-      console.log('get meta data')
-      var url = 'http://p1pr3la28.bkt.clouddn.com/'+name+'?avinfo'
-      console.log(url)
-      axios.get(url)
-        .then(function (response){
-          console.log(response.data)
-        })
-        .catch(function (error) {
-          console.log(error)
-        })
-    },
-    get_q_token: function (file) {
-      console.log('upload to qiniu')
-      console.log(file)
-      var self = this
-      axios.get('http://127.0.0.1:3000/q/token')
-        .then(function (response) {
-          console.log(response)
-          if (response.status === 200) {
-            var token = response.data.token
-            var config = {
-              useCdnDomain: true,
-              disableStatisticsReport: false,
-              retryCount: 6
-            }
-            var putExtra = {
-              fname: "",
-              params: {},
-              mimeType: file.type
-            }
-            var key = file.name
-            var observable = qiniu.upload(file, key, token, putExtra, config)
-
-            var t0 = performance.now()
-            console.log(t0)
-            var subscription = observable.subscribe(
-              function(res){
-                // console.log("next")
-                // console.log(res.total.percent)
-                self.upload_progress = res.total.percent.toFixed(2)
-              },
-              function(err){
-                console.log("err")
-                console.log(err)
-              },
-              function(res){
-                console.log("complete")
-                console.log(res)
-                var name = res.key
-                var t1 = performance.now()
-                console.log(t1)
-                console.log("upload time = " + (t1 - t0) + " milliseconds.")
-                self.get_q_meta(name)
-              }
-            )
-          } else {
-            alert("error")
-          }
-
-        })
-        .catch(function (error) {
-          console.log(error)
-        })
     },
     handleResize: function (event) {
       var height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
       this.fullHeight = height
       var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
-      this.sliderWidth = width - 400 - 64 - 16
-      console.log('width : ' + this.sliderWidth)
+      this.sliderWidth = width - 400 - 64 - 16 -16
     }
   },
   computed: {
     size: function () {
-      let s = this.video_size
+      let s = this.qVideo.size
       if (s < 1024) {
         return s + 'bytes'
       } else if (s < 1024 * 1024) {
@@ -552,10 +436,6 @@ export default {
       } else {
         return (s / (1024 * 1024.0)).toFixed(2) + 'MB'
       }
-    },
-    currentProgress: function () {
-      var width = 600 * this.currentTime / this.videoNode.duration
-      return 'margin-left:' + width + 'px'
     },
     btnPlay: function () {
       return this.isPlaying ? 'pause' : 'play'

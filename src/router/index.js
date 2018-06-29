@@ -6,15 +6,17 @@ import KeyPointCreator from '@/components/KeyPointCreator'
 Vue.use(Router)
 
 export default new Router({
+  mode: 'history',
   routes: [
     {
-      path: '/hello',
+      path: '/hello/',
       name: 'HelloWorld',
       component: HelloWorld
     },
     {
-      path: '/kpc',
+      path: '/kpc/:id/',
       name: 'kpc',
+      props: true,
       component: KeyPointCreator
     },
     {
