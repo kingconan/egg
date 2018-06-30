@@ -1,8 +1,9 @@
 <template>
   <div id="app" style="width: 100%;position: relative">
     <div v-if="mode == 0">
-       <input placeholder="server url" v-model="qurl" />
-      <button type="button" @click="set_by_qiniu">use qiniu url</button>
+      Load...
+       <!--<input placeholder="server url" v-model="qurl" />-->
+      <!--<button type="button" @click="set_by_qiniu">use qiniu url</button>-->
     </div>
     <div v-else style="width: 100%;position: relative;">
       <div style="float: left;width: 100%;position: relative;height: 100%;overflow-y: auto;">
@@ -110,7 +111,7 @@
             </div>
             <div style="height: 1px;background-color: #ccc;margin: 8px 0"></div>
             <div>
-              <button type="button" @click="create">create</button>
+              <button type="button" @click="send_points">create</button>
             </div>
           </div>
           <div v-else>
@@ -136,16 +137,6 @@ export default {
   data: function () {
     return {
       qVideo: {
-        id: "",
-        user_id: "",
-        duration: 0,
-        size: 0,
-        width: 0,
-        height: 0,
-        title: "",
-        category: '',
-        tag: '',
-        coverUrl: "",
       },
       points: [],
       qurl: 'http://p1pr3la28.bkt.clouddn.com/test.mp4',
@@ -195,20 +186,9 @@ export default {
     //request data here
     console.log("created")
     console.log(this.$route.params.id)
-    //81fb9d88-36ed-4601-a933-867d615beadb
-    //http://api.yiqikangfu.com/admin/v1/tutorial/draft/list
-    //http://127.0.0.1:8080/admin/v1/tutorial/draft/list
-    let config = {
-      headers : {
-        'Content-Type':'application/json;charset=UTF-8'
-      },
-    };
-    axios.post('http://127.0.0.1:8080/admin/v1/tutorial/draft/list',
-      {"orgUrl":null,"showAll":null,"orderBy":"id desc","pageNo":1,"pageSize":10}
-    ).then(function (response) {
-      console.log(response);
-    }).catch(function (error){
-      console.log(error)
+    var self = this
+    this.autoLogin(function () {
+      self.getDraft(self.$route.params.id)
     })
 
   },
@@ -226,6 +206,114 @@ export default {
     }
   },
   methods: {
+    send_points: function() {
+      var points = []
+      for(var i=0;i<this.points.length;i++){
+        var p = this.points[i]
+        console.log(p)
+        points.push({
+          description: p.description,
+          start: p.range[0]*1000,
+          end: p.range[1]*1000
+        })
+      }
+      points.sort(function(a, b){
+        return a.start - b.start
+      })
+
+      var d = {
+        id: this.qVideo.id,
+        pointData: JSON.stringify(points)
+      }
+      var self = this
+      var token = localStorage.getItem("token")
+      console.log("reqeust token = "+token)
+      let config = {
+        headers: {
+          "x-kmvc-user-token": token
+        }
+      }
+      axios.post('http://localhost:8080/admin/v1/tutorial/draft/updatePoint',
+        d,
+        config
+      ).then(function (response) {
+        console.log(response);
+        if(response.status === 200){
+          var d = response.data;
+          if(d.ok === 0){
+            console.log(d.obj)
+          }
+        }
+      }).catch(function (error){
+        console.log(error)
+      })
+      console.log()
+    },
+    getDraft: function(id){
+      //http://localhost:8080/admin/v1/tutorial/ticket/list
+      var self = this
+      var token = localStorage.getItem("token")
+      console.log("reqeust token = "+token)
+      let config = {
+        headers: {
+          "x-kmvc-user-token": token
+        }
+      }
+      axios.post('http://localhost:8080/admin/v1/tutorial/draft/get',
+        {id:id},
+        config
+      ).then(function (response) {
+        console.log(response);
+        if(response.status === 200){
+          var d = response.data;
+          if(d.ok === 0){
+            console.log(d.obj)
+            self.qVideo = d.obj
+            if(d.obj.pointData){
+              var ps = JSON.parse(d.obj.pointData)
+              var pointD = []
+              for(var i=0;i<ps.length;i++){
+                pointD.push({
+                  description: ps[i].description,
+                  range:[ (ps[i].start / 1000).toFixed(2), (ps[i].end/1000).toFixed(2)]
+                })
+              }
+            }
+            self.mode = 1
+            self.points = pointD
+            self.fileUrl = "http://paz3rk3if.bkt.clouddn.com/"+self.qVideo.videoKey
+          }
+        }
+      }).catch(function (error){
+        console.log(error)
+      })
+    },
+    autoLogin: function(callback) {
+      var token = localStorage.getItem("token")
+      console.log(token)
+      if(token === undefined || token === null || token === "") {
+        console.log("has already login")
+        callback()
+        return
+      }
+      axios.post('http://localhost:8080/admin/v1/self/login',
+        {email: "zhangyh@eggvi.com", password: "Pgmq3p"}
+      ).then(function (response) {
+        console.log(response);
+        if(response.status === 200){
+          var d = response.data;
+          if(d.ok === 0){
+            var user = d.obj;
+            localStorage.setItem('user', JSON.stringify(user))
+            localStorage.setItem('token', user.token)
+            console.log('login ok')
+            callback()
+          }
+        }
+      }).catch(function (error){
+        console.log(error)
+      })
+    },
     from_file: function () {
       document.getElementById("uploader-srt").click()
     },
@@ -255,6 +343,7 @@ export default {
       ctx.drawImage(this.videoNode, 0, 0, canvas.width, canvas.height)
       var img = new Image()
       this.qVideo.coverUrl = canvas.toDataURL()
+      this.$forceUpdate()
     },
     sec2time: function (value) {
       var minutes = Math.floor(value / 60);
@@ -272,12 +361,8 @@ export default {
       }
       return hours + ':' + minutes + ':' + seconds
     },
-    create: function() {
-      var json = JSON.stringify(this.$data)
-      console.log(json)
-    },
     add_point: function () {
-      var d = this.qVideo.duration / 5 || 60;
+      var d = this.qVideo.videoDuration / 5 || 60;
       var point = {
         description: '',
         range: [0, d]
@@ -398,7 +483,7 @@ export default {
     },
     playVideo: function () {
       if (this.isPlaying) {
-        this.videoNode.playbackRate = 1
+        // this.videoNode.playbackRate = 1
         this.pauseVideo()
         this.isPlaying = false
       } else {
@@ -428,7 +513,7 @@ export default {
   },
   computed: {
     size: function () {
-      let s = this.qVideo.size
+      let s = this.qVideo.videoSize
       if (s < 1024) {
         return s + 'bytes'
       } else if (s < 1024 * 1024) {
